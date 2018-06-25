@@ -12,7 +12,7 @@ const URL_REG = new RegExp(expression);
 
 if (process.env.NODE_ENV === 'production') {
   bot = new Bot(token);
-  bot.setWebHook(process.env.URL + bot.token);
+  bot.setWebHook(process.env.URL);
 } else {
   bot = new Bot(token, {
     polling: true
