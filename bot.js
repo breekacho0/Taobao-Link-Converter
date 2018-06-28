@@ -31,9 +31,10 @@ bot.onText(URL_REG, (msg, match) => {
   if (contains(message, 'taobao.com')) {
     if (contains(url, M_INTL) || contains(url, H5)) {
       link = buildTaobaoURL(url);
+      bot.deleteMessage(chat_id,message_id);
+      bot.sendMessage(chat_id, link);
     }
-    bot.deleteMessage(chat_id,message_id);
-    bot.sendMessage(chat_id, link);
+
   }
 });
 
