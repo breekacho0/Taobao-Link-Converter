@@ -43,43 +43,54 @@ bot.onText(URL_REG, (msg, match) => {
     if (contains(url, M_INTL) || contains(url, TAOBAO_ITEM_URL)) {
       link = buildTaobaoURL(url);
       getItem(link)
+        .catch(err => {
+          console.log(err);
+          let text = 'Arrr, блядь, ошибка. Иди нахуй';
+          if (contains(url, M_INTL) || contains(url, H5)) {
+            text+=`\nНо вот твоя [ссылка](${link})`;
+            bot.deleteMessage(chat_id, message_id);
+          }
+          bot.sendMessage(chat_id, text, opts);
+        })
         .then(item => {
-          console.log(item);
-          console.log(`------------`);
-          var text = ``;
-          if (!(contains(url, M_INTL) || contains(url, H5))) {
-            opts.reply_to_message_id = message_id;
-          }
-          //text += item.images.length > 0 ? `https:${item.images[0]}\n` : ``;
-          text += item.title ? `${item.title}\n\n` : ``;
-          if (item.props.length > 0) {
-            item.props.forEach(el => {
-              let values = '';
-              if (el.values.length > 1) {
-                values = el.values.join(', ');
-              } else {
-                values = el.values[0];
-              }
-              text += `*${el.type}*: ${values}\n`;
-            }) 
-          }
-          text += `\n*Price*: ${item.price} (not logged in)\n`;
-          text += `[Link](${link})\n\n`;
-          text += item.shop.name ? `*Shop*: [${item.shop.name}](https:${item.shop.url})\n` : ``;
-          //text += item.shop.url ? `https:${item.shop.url}\n` : ``;
-          translate.translate(text, {
-            from: 'zh',
-            to: 'en'
-          }, (err, res) => {
-            opts.caption = res.text[0];
-            opts.disable_web_page_preview = true;
-            bot.sendPhoto(chat_id, `${item.images.length > 0 ? `https:${item.images[0]}\n` : ``}`, opts)
-              .then(resolve => {
-                if (contains(url, M_INTL) || contains(url, H5)) {
-                  bot.deleteMessage(chat_id, message_id);
+          if (typeof item !== 'undefined') {
+            console.log(item);
+            console.log(`------------`);
+            var text = ``;
+            if (!(contains(url, M_INTL) || contains(url, H5))) {
+              opts.reply_to_message_id = message_id;
+            }
+            //text += item.images.length > 0 ? `https:${item.images[0]}\n` : ``;
+            text += item.title ? `${item.title}\n\n` : ``;
+            if (item.props.length > 0) {
+              item.props.forEach(el => {
+                let values = '';
+                if (el.values.length > 1) {
+                  values = el.values.join(', ');
+                } else {
+                  values = el.values[0];
                 }
-              });
-          });
+                text += `${el.type}: ${values}\n`;
+              }) 
+            }
+            text += `\nPrice: ${item.price} (not logged in)\n`;
+            text += `[Link](${link})\n\n`;
+            text += item.shop.name ? `Shop: [${item.shop.name}](https:${item.shop.url})\n` : ``;
+            //text += item.shop.url ? `https:${item.shop.url}\n` : ``;
+            translate.translate(text, {
+              from: 'zh',
+              to: 'en'
+            }, (err, res) => {
+              opts.caption = res.text[0];
+              opts.disable_web_page_preview = true;
+              bot.sendPhoto(chat_id, `${item.images.length > 0 ? `https:${item.images[0]}\n` : ``}`, opts)
+                .then(resolve => {
+                  if (contains(url, M_INTL) || contains(url, H5)) {
+                    bot.deleteMessage(chat_id, message_id);
+                  }
+                });
+            });
+          }
         });
     }
 
@@ -140,66 +151,71 @@ function getItem(url) {
     GBK.fetch(url).to('string', (err, body) => {
       if (!err) {
         var $ = cheerio.load(body);
-        var $scripts = $('script');
-        var $script = {};
-        var scriptHtml = '';
-        var info = {};
-        info.props = [];
-        var price = $('.tb-rmb-num').html();
-        info.price = price;
-        var $tags = $('#J_isku');
-        var $j_props = $tags.find('.J_Prop');
-        //console.log($j_props);
-        $j_props.each((i, $el) => {
-          var type = $($el).find('.J_TSaleProp').attr('data-property');
-          //console.log($($el).find('.J_TSaleProp'));
-          //console.log(`type: ${type}`);
-          var $values = $($el).find('.J_TSaleProp li');
-          var values = [];
-          $values.each((index, $el) => {
-            value = $($el).find('span').text();
-            // console.log(value);
-            values.push(value);
+        if ($('#error-notice').length==0){
+          var $scripts = $('script');
+          var $script = {};
+          var scriptHtml = '';
+          var info = {};
+          info.props = [];
+          var price = $('.tb-rmb-num').html();
+          info.price = price;
+          var $tags = $('#J_isku');
+          var $j_props = $tags.find('.J_Prop');
+          //console.log($j_props);
+          $j_props.each((i, $el) => {
+            var type = $($el).find('.J_TSaleProp').attr('data-property');
+            //console.log($($el).find('.J_TSaleProp'));
+            //console.log(`type: ${type}`);
+            var $values = $($el).find('.J_TSaleProp li');
+            var values = [];
+            $values.each((index, $el) => {
+              value = $($el).find('span').text();
+              // console.log(value);
+              values.push(value);
+            });
+            info.props.push({
+              type: type,
+              values: values
+            });
           });
-          info.props.push({
-            type: type,
-            values: values
-          });
-        });
-        if ($scripts.length > 1) {
-          $scripts.filter((eq, $script) => {
-            let html = $scripts.eq(eq).html();
-            if (contains(html, 'var g_config'))
-              return $script;
-          });
-          $script = $scripts.eq(0);
-          scriptHtml = $script.html();
-        } else {
-          if ($scripts.length > 0) {
+          if ($scripts.length > 1) {
+            $scripts.filter((eq, $script) => {
+              let html = $scripts.eq(eq).html();
+              if (contains(html, 'var g_config'))
+                return $script;
+            });
             $script = $scripts.eq(0);
             scriptHtml = $script.html();
           } else {
-            reject(new Error('Has no data'));
+            if ($scripts.length > 0) {
+              $script = $scripts.eq(0);
+              scriptHtml = $script.html();
+            } else {
+              reject(new Error('Has no data'));
+            }
+          }
+  
+          if (contains(scriptHtml, 'var g_config')) {
+            const json = parseScript(scriptHtml);
+            var item = json.idata.item;
+            var seller = {};
+            seller.name = json.shopName;
+            seller.url = json.idata.shop.url;
+            const {
+              auctionImages: images,
+              title: title
+            } = item;
+            info = {
+              ...info,
+              title: title,
+              images: images,
+              shop: seller
+            };
+            resolve(info);
           }
         }
-
-        if (contains(scriptHtml, 'var g_config')) {
-          const json = parseScript(scriptHtml);
-          var item = json.idata.item;
-          var seller = {};
-          seller.name = json.shopName;
-          seller.url = json.idata.shop.url;
-          const {
-            auctionImages: images,
-            title: title
-          } = item;
-          info = {
-            ...info,
-            title: title,
-            images: images,
-            shop: seller
-          };
-          resolve(info);
+        else {
+          reject(new Error('Sth wrong with the page'));
         }
       } else {
         reject(new Error(err));
