@@ -2,18 +2,21 @@ const token = process.env.TOKEN;
 const Bot = require('node-telegram-bot-api');
 const request = require("request");
 const cheerio = require("cheerio");
+const esprima = require("esprima");
+const translate = require('yandex-translate')(process.env.YANDEX_API_KEY);
+const GBK = require("./gbk");
 var bot;
 
-const TAOBAO_URL = 'https://item.taobao.com/item.htm?';
-const TMALL_URL = 'https://detail.tmall.com/item.htm?';
+const TAOBAO_ITEM_URL = 'https://item.taobao.com/item.htm?';
 const M_INTL = 'm.intl.taobao.com';
+const TMALL_URL = 'https://detail.tmall.com/item.htm?';
+const SHOP_M = /shop\d+.m/gi;
 const BM_LIN = '139shoes.x.yupoo.com'
 const H5 = 'h5.m.taobao.com';
 var expression = /(http(s)?:\/\/.)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)/gi;
+const BM_LIN_HEAD = /[A-Z]{2}\d[A-Z]{2}/g;
 const URL_REG = new RegExp(expression);
 
-
-const BM_LIN_HEAD = /[A-Z]{2}\d[A-Z]{2}/g;
 if (process.env.NODE_ENV === 'production') {
   bot = new Bot(token);
   bot.setWebHook(process.env.URL);
@@ -29,6 +32,7 @@ bot.onText(URL_REG, (msg, match) => {
   var opts = {
     parse_mode: 'Markdown'
   };
+  //console.log(msg);
   var url = match[0];
   var message = data.text;
   var user = data.from;
@@ -36,11 +40,51 @@ bot.onText(URL_REG, (msg, match) => {
   var message_id = data.message_id;
   var link = '';
   if (contains(message, 'taobao.com')) {
-    if (contains(url, M_INTL) || contains(url, H5)) {
+    if (contains(url, M_INTL) || contains(url, TAOBAO_ITEM_URL)) {
       link = buildTaobaoURL(url);
-      bot.deleteMessage(chat_id, message_id);
-      bot.sendMessage(chat_id, link);
+      getItem(link)
+        .then(item => {
+          console.log(item);
+          console.log(`------------`);
+          var text = ``;
+          if (!(contains(url, M_INTL) || contains(url, H5))) {
+            opts.reply_to_message_id = message_id;
+          }
+          //text += item.images.length > 0 ? `https:${item.images[0]}\n` : ``;
+          text += item.title ? `${item.title}\n\n` : ``;
+          if (item.props.length > 0) {
+            item.props.forEach(el => {
+              let values = '';
+              if (el.values.length > 1) {
+                values = el.values.join(', ');
+              } else {
+                values = el.values[0];
+              }
+              text += `*${el.type}*: ${values}\n`;
+            }) 
+          }
+          text += `\n*Price*: ${item.price} (not logged in)\n`;
+          text += `[Link](${link})\n\n`;
+          text += item.shop.name ? `*Shop*: [${item.shop.name}](https:${item.shop.url})\n` : ``;
+          //text += item.shop.url ? `https:${item.shop.url}\n` : ``;
+          translate.translate(text, {
+            from: 'zh',
+            to: 'en'
+          }, (err, res) => {
+            opts.caption = res.text[0];
+            opts.disable_web_page_preview = true;
+            bot.sendPhoto(chat_id, `${item.images.length > 0 ? `https:${item.images[0]}\n` : ``}`, opts)
+              .then(resolve => {
+                if (contains(url, M_INTL) || contains(url, H5)) {
+                  bot.deleteMessage(chat_id, message_id);
+                }
+              });
+          });
+        });
     }
+
+
+
   }
   if (contains(message, BM_LIN)) {
     request(url, (err, response, body) => {
@@ -57,18 +101,23 @@ bot.onText(URL_REG, (msg, match) => {
       } else {
         console.log(err);
       }
-    })
+    });
   }
 });
 
-function buildTaobaoURL(url) {
+function buildTaobaoURL(url, shop = false) {
+
   var itemID = url.match(/[&?]id=\d+/gi);
   var link = itemID[0].substr(1, itemID[0].length);
-  return TAOBAO_URL + link;
+  return TAOBAO_ITEM_URL + link;
 }
 
-function contains(url, query) {
-  return url.indexOf(query) != -1;
+function contains(url, query, regexp = false) {
+  if (!regexp) {
+    return url.indexOf(query) != -1;
+  } else {
+    return query.test(url);
+  }
 }
 
 function buildPrice(code) {
@@ -83,7 +132,124 @@ function buildPrice(code) {
   };
   var price = vocabulary[arr[0]] * 100 + ((parseInt(arr[2]) + 5) % 10) * 10;
   return price;
-
 }
+
+function getItem(url) {
+  return new Promise((resolve, reject) => {
+    //request(url, (err, response, body) => {
+    GBK.fetch(url).to('string', (err, body) => {
+      if (!err) {
+        var $ = cheerio.load(body);
+        var $scripts = $('script');
+        var $script = {};
+        var scriptHtml = '';
+        var info = {};
+        info.props = [];
+        var price = $('.tb-rmb-num').html();
+        info.price = price;
+        var $tags = $('#J_isku');
+        var $j_props = $tags.find('.J_Prop');
+        //console.log($j_props);
+        $j_props.each((i, $el) => {
+          var type = $($el).find('.J_TSaleProp').attr('data-property');
+          //console.log($($el).find('.J_TSaleProp'));
+          //console.log(`type: ${type}`);
+          var $values = $($el).find('.J_TSaleProp li');
+          var values = [];
+          $values.each((index, $el) => {
+            value = $($el).find('span').text();
+            // console.log(value);
+            values.push(value);
+          });
+          info.props.push({
+            type: type,
+            values: values
+          });
+        });
+        if ($scripts.length > 1) {
+          $scripts.filter((eq, $script) => {
+            let html = $scripts.eq(eq).html();
+            if (contains(html, 'var g_config'))
+              return $script;
+          });
+          $script = $scripts.eq(0);
+          scriptHtml = $script.html();
+        } else {
+          if ($scripts.length > 0) {
+            $script = $scripts.eq(0);
+            scriptHtml = $script.html();
+          } else {
+            reject(new Error('Has no data'));
+          }
+        }
+
+        if (contains(scriptHtml, 'var g_config')) {
+          const json = parseScript(scriptHtml);
+          var item = json.idata.item;
+          var seller = {};
+          seller.name = json.shopName;
+          seller.url = json.idata.shop.url;
+          const {
+            auctionImages: images,
+            title: title
+          } = item;
+          info = {
+            ...info,
+            title: title,
+            images: images,
+            shop: seller
+          };
+          resolve(info);
+        }
+      } else {
+        reject(new Error(err));
+      }
+    });
+  });
+}
+
+function parseScript(script) {
+  const tokenize = esprima.parseScript(script);
+  const properties = tokenize.body[0].declarations[0].init.properties;
+  const result = {};
+  properties.forEach(x => {
+    const obj = parseObject(x);
+    var keys = Object.keys(obj);
+    if (keys.length > 0) {
+      var key = keys[0];
+      result[key] = obj[key];
+    }
+    return obj;
+  });
+  return result;
+}
+
+function parseObject(obj) {
+  var xd = {};
+  if (contains(obj.value.type, 'Literal')) {
+    xd[obj.key.name] = obj.value.value;
+  } else if (contains(obj.value.type, 'ObjectExpression')) {
+    const properties = obj.value.properties;
+    var result = {};
+    properties.forEach(x => {
+      const obj = parseObject(x);
+      var keys = Object.keys(obj);
+      if (keys.length > 0) {
+        var key = keys[0];
+        result[key] = obj[key];
+      }
+      return obj;
+    });
+    xd[obj.key.name] = result;
+  } else if (contains(obj.value.type, 'ArrayExpression')) {
+    var elements = []
+    obj.value.elements.forEach(x => {
+      elements.push(x.value);
+    });
+    xd[obj.key.name] = elements;
+  }
+  return xd;
+}
+
 
 module.exports = bot;

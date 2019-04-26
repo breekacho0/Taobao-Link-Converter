@@ -12,7 +12,9 @@
     "body-parser": "^1.15.0",
     "cheerio": "^1.0.0-rc.3",
     "dotenv": "^4.0.0",
+    "esprima": "^4.0.1",
     "express": "^4.13.4",
-    "node-telegram-bot-api": "^0.30.0"
+    "node-telegram-bot-api": "^0.30.0",
+    "yandex-translate": "^2.1.3"
   }
 }
