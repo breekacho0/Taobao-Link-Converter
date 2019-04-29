@@ -10,13 +10,16 @@ var bot;
 const TAOBAO_ITEM_URL = 'https://item.taobao.com/item.htm?';
 const M_INTL = 'm.intl.taobao.com';
 const TMALL_URL = 'https://detail.tmall.com/item.htm?';
+const TAOBAO_APP = 'https://m.tb.cn';
 const SHOP_M = /shop\d+.m/gi;
 const BM_LIN = '139shoes.x.yupoo.com'
 const H5 = 'h5.m.taobao.com';
 var expression = /(http(s)?:\/\/.)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)/gi;
 const BM_LIN_HEAD = /[A-Z]{2}\d[A-Z]{2}/g;
 const URL_REG = new RegExp(expression);
-
+var opts = {
+  parse_mode: 'Markdown'
+};
 if (process.env.NODE_ENV === 'production') {
   bot = new Bot(token);
   bot.setWebHook(process.env.URL);
@@ -29,9 +32,6 @@ console.log('Bot server started in the ' + process.env.NODE_ENV + ' mode');
 
 bot.onText(URL_REG, (msg, match) => {
   var data = msg;
-  var opts = {
-    parse_mode: 'Markdown'
-  };
   //console.log(msg);
   var url = match[0];
   var message = data.text;
@@ -39,63 +39,54 @@ bot.onText(URL_REG, (msg, match) => {
   var chat_id = data.chat.id;
   var message_id = data.message_id;
   var link = '';
-  if (contains(message, 'taobao.com')) {
-    if (contains(url, M_INTL) || contains(url, TAOBAO_ITEM_URL)) {
-      link = buildTaobaoURL(url);
-      getItem(link)
+  var telegram_info = {
+    chat_id: chat_id,
+    message_id: message_id
+  }
+  if (contains(url, TAOBAO_APP)) {
+    console.log(url);
+    getAppLink(url).then(newUrl => {
+      console.log(newUrl);
+      getItem(newUrl)
         .catch(err => {
           console.log(err);
           let text = 'Arrr, блядь, ошибка. Иди нахуй';
-          if (contains(url, M_INTL) || contains(url, H5)) {
-            text+=`\nНо вот твоя [ссылка](${link})`;
+          if (contains(newUrl, M_INTL) || contains(newUrl, H5)) {
+            text += `\nНо вот твоя [ссылка](${newUrl})`;
             bot.deleteMessage(chat_id, message_id);
           }
           bot.sendMessage(chat_id, text, opts);
         })
         .then(item => {
           if (typeof item !== 'undefined') {
-            console.log(item);
-            console.log(`------------`);
-            var text = ``;
-            if (!(contains(url, M_INTL) || contains(url, H5))) {
-              opts.reply_to_message_id = message_id;
-            }
-            //text += item.images.length > 0 ? `https:${item.images[0]}\n` : ``;
-            text += item.title ? `${item.title}\n\n` : ``;
-            if (item.props.length > 0) {
-              item.props.forEach(el => {
-                let values = '';
-                if (el.values.length > 1) {
-                  values = el.values.join(', ');
-                } else {
-                  values = el.values[0];
-                }
-                text += `${el.type}: ${values}\n`;
-              }) 
-            }
-            text += `\nPrice: ${item.price} (not logged in)\n`;
-            text += `[Link](${link})\n\n`;
-            text += item.shop.name ? `Shop: [${item.shop.name}](https:${item.shop.url})\n` : ``;
-            //text += item.shop.url ? `https:${item.shop.url}\n` : ``;
-            translate.translate(text, {
-              from: 'zh',
-              to: 'en'
-            }, (err, res) => {
-              opts.caption = res.text[0];
-              opts.disable_web_page_preview = true;
-              bot.sendPhoto(chat_id, `${item.images.length > 0 ? `https:${item.images[0]}\n` : ``}`, opts)
-                .then(resolve => {
-                  if (contains(url, M_INTL) || contains(url, H5)) {
-                    bot.deleteMessage(chat_id, message_id);
-                  }
-                });
-            });
+            item.link = newUrl
+            buildMessage(item, telegram_info, newUrl);
+          }
+        });
+
+    });
+  }
+
+  if (contains(message, 'taobao.com')) {
+    if (contains(url, M_INTL) || contains(url, TAOBAO_ITEM_URL) || contains(url, H5)) {
+      link = buildTaobaoURL(url);
+      getItem(link)
+        .catch(err => {
+          console.log(err);
+          let text = 'Arrr, блядь, ошибка. Иди нахуй';
+          if (contains(url, M_INTL) || contains(url, H5)) {
+            text += `\nНо вот твоя [ссылка](${link})`;
+            bot.deleteMessage(chat_id, message_id);
+          }
+          bot.sendMessage(chat_id, text, opts);
+        })
+        .then(item => {
+          if (typeof item !== 'undefined') {
+            item.link = link
+            buildMessage(item, telegram_info, url);
           }
         });
     }
-
-
-
   }
   if (contains(message, BM_LIN)) {
     request(url, (err, response, body) => {
@@ -116,11 +107,17 @@ bot.onText(URL_REG, (msg, match) => {
   }
 });
 
-function buildTaobaoURL(url, shop = false) {
-
-  var itemID = url.match(/[&?]id=\d+/gi);
-  var link = itemID[0].substr(1, itemID[0].length);
-  return TAOBAO_ITEM_URL + link;
+function buildTaobaoURL(url, shop = false, app = false) {
+  if (!shop && !app) {
+    var itemID = url.match(/[&?]id=\d+/gi);
+    var link = itemID[0].substr(1, itemID[0].length);
+    return TAOBAO_ITEM_URL + link;
+  }
+  if (app) {
+    var itemID = url.match(/i\d+.htm/gi);
+    var link = itemID[0].substr(1, itemID[0].length - 5);
+    return `${TAOBAO_ITEM_URL}id=${link}`;
+  }
 }
 
 function contains(url, query, regexp = false) {
@@ -144,6 +141,63 @@ function buildPrice(code) {
   var price = vocabulary[arr[0]] * 100 + ((parseInt(arr[2]) + 5) % 10) * 10;
   return price;
 }
+
+function buildMessage(item, telegram, url) {
+  console.log(item);
+  console.log(`------------`);
+  var text = ``;
+  if (!(contains(url, M_INTL) || contains(url, H5))) {
+    opts.reply_to_message_id = telegram.message_id;
+  }
+  //text += item.images.length > 0 ? `https:${item.images[0]}\n` : ``;
+  text += item.title ? `${item.title}\n\n` : ``;
+  if (item.props.length > 0) {
+    item.props.forEach(el => {
+      let values = '';
+      if (el.values.length > 1) {
+        values = el.values.join(', ');
+      } else {
+        values = el.values[0];
+      }
+      text += `${el.type}: ${values}\n`;
+    })
+  }
+  text += `\nPrice: ${item.price} (not logged in)\n`;
+  text += `[Link](${item.link})\n\n`;
+  text += item.shop.name ? `Shop: [${item.shop.name}](https:${item.shop.url})\n` : ``;
+  //text += item.shop.url ? `https:${item.shop.url}\n` : ``;
+  translate.translate(text, {
+    from: 'zh',
+    to: 'en'
+  }, (err, res) => {
+    opts.caption = res.text[0];
+    opts.disable_web_page_preview = true;
+    bot.sendPhoto(telegram.chat_id, `${item.images.length > 0 ? `https:${item.images[0]}\n` : ``}`, opts)
+      .then(resolve => {
+        if (contains(url, M_INTL) || contains(url, H5)) {
+          bot.deleteMessage(telegram.chat_id, telegram.message_id);
+        }
+      });
+  });
+}
+
+function getAppLink(url) {
+  return new Promise((resolve, reject) => {
+    request(url, (err, response, body) => {
+      if (!err) {
+        var $ = cheerio.load(body);
+        var $scripts = $('script');
+        var $script = {};
+        var scriptHtml = '';
+        $script = $scripts.eq(1);
+        scriptHtml = $script.html();
+        var url = scriptHtml.match(expression)[0];
+        url = buildTaobaoURL(url, 0, 1);
+        resolve(url);
+      }
+    });
+  });
+};
 
 function getItem(url) {
   return new Promise((resolve, reject) => {
@@ -213,7 +267,7 @@ function getItem(url) {
             };
             resolve(info);
           }
-        }
+        } 
         else {
           reject(new Error('Sth wrong with the page'));
         }
