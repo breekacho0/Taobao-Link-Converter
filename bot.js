@@ -150,7 +150,7 @@ function buildMessage(item, telegram, url) {
     opts.reply_to_message_id = telegram.message_id;
   }
   //text += item.images.length > 0 ? `https:${item.images[0]}\n` : ``;
-  text += item.title ? `${item.title}\n\n` : ``;
+  text += item.title ? `${item.title.replace('@','')}\n\n` : ``;
   if (item.props.length > 0) {
     item.props.forEach(el => {
       let values = '';
@@ -164,20 +164,32 @@ function buildMessage(item, telegram, url) {
   }
   text += `\nPrice: ${item.price} (not logged in)\n`;
   text += `[Link](${item.link})\n\n`;
-  text += item.shop.name ? `Shop: [${item.shop.name}](https:${item.shop.url})\n` : ``;
+  text += item.shop.name ? `Shop: [${item.shop.name}](${item.shop.url})\n` : ``;
   //text += item.shop.url ? `https:${item.shop.url}\n` : ``;
   translate.translate(text, {
     from: 'zh',
     to: 'en'
   }, (err, res) => {
     opts.caption = res.text[0];
+    console.log(opts.caption);
     opts.disable_web_page_preview = true;
     bot.sendPhoto(telegram.chat_id, `${item.images.length > 0 ? `https:${item.images[0]}\n` : ``}`, opts)
       .then(resolve => {
         if (contains(url, M_INTL) || contains(url, H5)) {
           bot.deleteMessage(telegram.chat_id, telegram.message_id);
         }
+      })
+    .catch(err => {
+      console.log(err.response.req.res.body);
+      text = `Dude, not today\n${err.response.req.res.body.error_code}: ${err.response.req.res.body.desciption}`;
+      if (contains(url, M_INTL) || contains(url, H5)) {
+        bot.deleteMessage(telegram.chat_id, telegram.message_id);
+        text += `\n[URL](${url})`;
+      }
+      bot.sendMessage(telegram.chat_id, text, {
+        parse_mode: 'Markdown'
       });
+    });
   });
 }
 
@@ -205,7 +217,7 @@ function getItem(url) {
     GBK.fetch(url).to('string', (err, body) => {
       if (!err) {
         var $ = cheerio.load(body);
-        if ($('#error-notice').length==0){
+        if ($('#error-notice').length == 0) {
           var $scripts = $('script');
           var $script = {};
           var scriptHtml = '';
@@ -248,13 +260,16 @@ function getItem(url) {
               reject(new Error('Has no data'));
             }
           }
-  
+
           if (contains(scriptHtml, 'var g_config')) {
             const json = parseScript(scriptHtml);
             var item = json.idata.item;
             var seller = {};
             seller.name = json.shopName;
             seller.url = json.idata.shop.url;
+            if (!contains(seller.url, 'http')) {
+              seller.url = `https:${seller.url}`;
+            }
             const {
               auctionImages: images,
               title: title
@@ -267,8 +282,7 @@ function getItem(url) {
             };
             resolve(info);
           }
-        } 
-        else {
+        } else {
           reject(new Error('Sth wrong with the page'));
         }
       } else {
