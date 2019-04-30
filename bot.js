@@ -17,9 +17,6 @@ const H5 = 'h5.m.taobao.com';
 var expression = /(http(s)?:\/\/.)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)/gi;
 const BM_LIN_HEAD = /[A-Z]{2}\d[A-Z]{2}/g;
 const URL_REG = new RegExp(expression);
-var opts = {
-  parse_mode: 'Markdown'
-};
 if (process.env.NODE_ENV === 'production') {
   bot = new Bot(token);
   bot.setWebHook(process.env.URL);
@@ -39,6 +36,9 @@ bot.onText(URL_REG, (msg, match) => {
   var chat_id = data.chat.id;
   var message_id = data.message_id;
   var link = '';
+  var opts = {
+    parse_mode: 'Markdown'
+  };
   var telegram_info = {
     chat_id: chat_id,
     message_id: message_id
@@ -146,6 +146,9 @@ function buildMessage(item, telegram, url) {
   console.log(item);
   console.log(`------------`);
   var text = ``;
+  opts = {
+    parse_mode: 'Markdown'
+  };
   if (!(contains(url, M_INTL) || contains(url, H5))) {
     opts.reply_to_message_id = telegram.message_id;
   }
@@ -184,7 +187,7 @@ function buildMessage(item, telegram, url) {
       text = `Dude, not today\n${err.response.req.res.body.error_code}: ${err.response.req.res.body.desciption}`;
       if (contains(url, M_INTL) || contains(url, H5)) {
         bot.deleteMessage(telegram.chat_id, telegram.message_id);
-        text += `\n[URL](${url})`;
+        text += `\n[URL](${item.link})`;
       }
       bot.sendMessage(telegram.chat_id, text, {
         parse_mode: 'Markdown'
