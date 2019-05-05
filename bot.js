@@ -114,10 +114,18 @@ function buildTaobaoURL(url, shop = false, app = false) {
     return TAOBAO_ITEM_URL + link;
   }
   if (app) {
-    var itemID = url.match(/i\d+.htm/gi);
-    var link = itemID[0].substr(1, itemID[0].length - 5);
-    return `${TAOBAO_ITEM_URL}id=${link}`;
+    if (contains(url, TAOBAO_ITEM_URL)) {
+      var itemID = url.match(/[&?]id=\d+/gi);
+      var link = itemID[0].substr(1, itemID[0].length);
+      return TAOBAO_ITEM_URL + link;
+    }
+    if (contains(url,'a.m.taobao')){
+      var itemID = url.match(/i\d+.htm/gi);
+      var link = itemID[0].substr(1, itemID[0].length - 5);
+      return `${TAOBAO_ITEM_URL}id=${link}`;
+    }
   }
+  return new Error('url is null');
 }
 
 function contains(url, query, regexp = false) {
@@ -182,17 +190,17 @@ function buildMessage(item, telegram, url) {
           bot.deleteMessage(telegram.chat_id, telegram.message_id);
         }
       })
-    .catch(err => {
-      console.log(err.response.req.res.body);
-      text = `Dude, not today\n${err.response.req.res.body.error_code}: ${err.response.req.res.body.desciption}`;
-      if (contains(url, M_INTL) || contains(url, H5)) {
-        bot.deleteMessage(telegram.chat_id, telegram.message_id);
-        text += `\n[URL](${item.link})`;
-      }
-      bot.sendMessage(telegram.chat_id, text, {
-        parse_mode: 'Markdown'
+      .catch(err => {
+        console.log(err.response.req.res.body);
+        text = `Dude, not today\n${err.response.req.res.body.error_code}: ${err.response.req.res.body.desciption}`;
+        if (contains(url, M_INTL) || contains(url, H5)) {
+          bot.deleteMessage(telegram.chat_id, telegram.message_id);
+          text += `\n[URL](${item.link})`;
+        }
+        bot.sendMessage(telegram.chat_id, text, {
+          parse_mode: 'Markdown'
+        });
       });
-    });
   });
 }
 
