@@ -92,6 +92,7 @@ bot.onText(URL_REG, (msg, match) => {
     request(url, (err, response, body) => {
       if (!err) {
         var $ = cheerio.load(body);
+        console.log(body);
         var head = $('span.showalbumheader__gallerytitle').text();
         if (BM_LIN_HEAD.test(head)) {
           var code = head.match(BM_LIN_HEAD);
@@ -106,6 +107,18 @@ bot.onText(URL_REG, (msg, match) => {
     });
   }
 });
+bot.onText(BM_LIN_HEAD, (msg, match) => {
+  var data = msg;
+  var price = buildPrice(match[0]);
+  var chat_id = data.chat.id;
+  var message_id = data.message_id;
+  var opts = {
+    parse_mode: 'Markdown'
+  };
+  opts.reply_to_message_id = message_id;
+  var text_message = `Прайслар ${price} юаньлар`;
+  bot.sendMessage(chat_id, text_message, opts);
+});
 
 function buildTaobaoURL(url, shop = false, app = false) {
   if (!shop && !app) {
@@ -119,7 +132,7 @@ function buildTaobaoURL(url, shop = false, app = false) {
       var link = itemID[0].substr(1, itemID[0].length);
       return TAOBAO_ITEM_URL + link;
     }
-    if (contains(url,'a.m.taobao')){
+    if (contains(url, 'a.m.taobao')) {
       var itemID = url.match(/i\d+.htm/gi);
       var link = itemID[0].substr(1, itemID[0].length - 5);
       return `${TAOBAO_ITEM_URL}id=${link}`;
