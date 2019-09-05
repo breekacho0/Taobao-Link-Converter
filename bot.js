@@ -194,27 +194,64 @@ function buildMessage(item, telegram, url) {
     from: 'zh',
     to: 'en'
   }, (err, res) => {
-    opts.caption = res.text[0];
-    console.log(opts.caption);
-    opts.disable_web_page_preview = true;
-    bot.sendPhoto(telegram.chat_id, `${item.images.length > 0 ? `https:${item.images[0]}\n` : ``}`, opts)
+    console.log(res);
+    if (item.images.length>1) {
+      let media = [];
+      item.images.forEach(image => {
+        media.push({ type: 'photo', media: `https:${image}`});
+      });
+      bot.sendMediaGroup(telegram.chat_id, media, opts)
       .then(resolve => {
-        if (contains(url, M_INTL) || contains(url, H5)) {
-          bot.deleteMessage(telegram.chat_id, telegram.message_id);
-        }
+        bot.sendMessage(telegram.chat_id, res.text[0], opts);
       })
       .catch(err => {
-        console.log(err.response.req.res.body);
-        text = `Dude, not today\n${err.response.req.res.body.error_code}: ${err.response.req.res.body.desciption}`;
-        if (contains(url, M_INTL) || contains(url, H5)) {
-          bot.deleteMessage(telegram.chat_id, telegram.message_id);
-          text += `\n[URL](${item.link})`;
-        }
-        bot.sendMessage(telegram.chat_id, text, {
-          parse_mode: 'Markdown'
+        opts.caption = res.text[0];
+        console.log(opts.caption);
+        opts.disable_web_page_preview = true;
+        bot.sendPhoto(telegram.chat_id, `${item.images.length > 0 ? `https:${item.images[0]}\n` : ``}`, opts)
+        .then(resolve => {
+          if (contains(url, M_INTL) || contains(url, H5)) {
+            bot.deleteMessage(telegram.chat_id, telegram.message_id);
+          }
+        })
+        .catch(err => {
+          console.log(err.response.req.res.body);
+          text = `Dude, not today\n${err.response.req.res.body.error_code}: ${err.response.req.res.body.desciption}`;
+          if (contains(url, M_INTL) || contains(url, H5)) {
+            bot.deleteMessage(telegram.chat_id, telegram.message_id);
+            text += `\n[URL](${item.link})`;
+          }
+          bot.sendMessage(telegram.chat_id, text, {
+            parse_mode: 'Markdown'
+          });
         });
       });
-  });
+    } 
+    else if (item.images.length > 0) {
+      opts.caption = res.text[0];
+      console.log(opts.caption);
+      opts.disable_web_page_preview = true;
+      bot.sendPhoto(telegram.chat_id, `${item.images.length > 0 ? `https:${item.images[0]}\n` : ``}`, opts)
+        .then(resolve => {
+          if (contains(url, M_INTL) || contains(url, H5)) {
+            bot.deleteMessage(telegram.chat_id, telegram.message_id);
+          }
+        })
+        .catch(err => {
+          console.log(err.response.req.res.body);
+          text = `Dude, not today\n${err.response.req.res.body.error_code}: ${err.response.req.res.body.desciption}`;
+          if (contains(url, M_INTL) || contains(url, H5)) {
+            bot.deleteMessage(telegram.chat_id, telegram.message_id);
+            text += `\n[URL](${item.link})`;
+          }
+          bot.sendMessage(telegram.chat_id, text, {
+            parse_mode: 'Markdown'
+          });
+        });
+      }
+    });
+    
+    
 }
 
 function getAppLink(url) {
