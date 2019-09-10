@@ -15,6 +15,7 @@ const SHOP_M = /shop\d+.m/gi;
 const BM_LIN = '139shoes.x.yupoo.com'
 const H5 = 'h5.m.taobao.com';
 var expression = /(http(s)?:\/\/.)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)/gi;
+const MD_entitities = /(\*)+|(\<)+|(\>)+|(\`)+|(\_)+/gi
 const BM_LIN_HEAD = /[A-Z]{2}\d[A-Z]{2}/g;
 const URL_REG = new RegExp(expression);
 if (process.env.NODE_ENV === 'production') {
@@ -202,10 +203,17 @@ function buildMessage(item, telegram, url) {
       });
       bot.sendMediaGroup(telegram.chat_id, media, opts)
       .then(resolve => {
-        bot.sendMessage(telegram.chat_id, res.text[0], opts);
+        console.log(resolve);
+        opts.reply_to_message_id = resolve[0].message_id;
+        let text = res.text[0].replace(MD_entitities, '');
+        delete opts.media;
+        delete opts.caption;
+        console.log(opts);
+        bot.sendMessage(telegram.chat_id, text, opts);
       })
       .catch(err => {
-        opts.caption = res.text[0];
+        console.log(err);
+        opts.caption = res.text[0].replace(MD_entitities, '');
         console.log(opts.caption);
         opts.disable_web_page_preview = true;
         bot.sendPhoto(telegram.chat_id, `${item.images.length > 0 ? `https:${item.images[0]}\n` : ``}`, opts)
@@ -221,6 +229,7 @@ function buildMessage(item, telegram, url) {
             bot.deleteMessage(telegram.chat_id, telegram.message_id);
             text += `\n[URL](${item.link})`;
           }
+
           bot.sendMessage(telegram.chat_id, text, {
             parse_mode: 'Markdown'
           });
