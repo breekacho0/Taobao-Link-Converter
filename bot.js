@@ -207,7 +207,6 @@ function buildMessage(item, telegram, url) {
         opts.reply_to_message_id = resolve[0].message_id;
         let text = res.text[0].replace(MD_entitities, '');
         delete opts.media;
-        delete opts.caption;
         console.log(opts);
         bot.sendPhoto(telegram.chat_id, `${item.images.length > 0 ? `https:${item.images[0]}\n` : ``}`, opts)
         .then(resolve => {
