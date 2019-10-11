@@ -209,7 +209,12 @@ function buildMessage(item, telegram, url) {
         delete opts.media;
         delete opts.caption;
         console.log(opts);
-        bot.sendMessage(telegram.chat_id, text, opts);
+        bot.sendPhoto(telegram.chat_id, `${item.images.length > 0 ? `https:${item.images[0]}\n` : ``}`, opts)
+        .then(resolve => {
+          if (contains(url, M_INTL) || contains(url, H5)) {
+            bot.deleteMessage(telegram.chat_id, telegram.message_id);
+          }
+        })
       })
       .catch(err => {
         console.log(err);
