@@ -208,6 +208,7 @@ function buildMessage(item, telegram, url) {
         let text = res.text[0].replace(MD_entitities, '');
         delete opts.media;
         console.log(opts);
+        opts.caption = text;
         bot.sendPhoto(telegram.chat_id, `${item.images.length > 0 ? `https:${item.images[0]}\n` : ``}`, opts)
         .then(resolve => {
           if (contains(url, M_INTL) || contains(url, H5)) {
