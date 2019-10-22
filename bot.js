@@ -18,6 +18,10 @@ var expression = /(http(s)?:\/\/.)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{
 const MD_entitities = /(\*)+|(\<)+|(\>)+|(\`)+|(\_)+/gi
 const BM_LIN_HEAD = /[A-Z]{2}\d[A-Z]{2}/g;
 const URL_REG = new RegExp(expression);
+const languages = {
+  from: 'zh',
+  to: 'en'
+};
 if (process.env.NODE_ENV === 'production') {
   bot = new Bot(token);
   bot.setWebHook(process.env.URL);
@@ -30,7 +34,6 @@ console.log('Bot server started in the ' + process.env.NODE_ENV + ' mode');
 
 bot.onText(URL_REG, (msg, match) => {
   var data = msg;
-  //console.log(msg);
   var url = match[0];
   var message = data.text;
   var user = data.from;
@@ -98,9 +101,11 @@ bot.onText(URL_REG, (msg, match) => {
         if (BM_LIN_HEAD.test(head)) {
           var code = head.match(BM_LIN_HEAD);
           var price = buildPrice(code[0]);
-          opts.reply_to_message_id = message_id;
-          var text_message = `Прайслар ${price} юаньлар`;
-          bot.sendMessage(chat_id, text_message, opts);
+          if (price) {
+            opts.reply_to_message_id = message_id;
+            var text_message = `Price ${price} \u00a5`;
+            bot.sendMessage(chat_id, text_message, opts);
+          }
         }
       } else {
         console.log(err);
@@ -111,14 +116,16 @@ bot.onText(URL_REG, (msg, match) => {
 bot.onText(BM_LIN_HEAD, (msg, match) => {
   var data = msg;
   var price = buildPrice(match[0]);
-  var chat_id = data.chat.id;
-  var message_id = data.message_id;
-  var opts = {
-    parse_mode: 'Markdown'
-  };
-  opts.reply_to_message_id = message_id;
-  var text_message = `Прайслар ${price} юаньлар`;
-  bot.sendMessage(chat_id, text_message, opts);
+  if (price) {
+    var chat_id = data.chat.id;
+    var message_id = data.message_id;
+    var opts = {
+      parse_mode: 'Markdown'
+    };
+    opts.reply_to_message_id = message_id;
+    var text_message = `Price ${price} \u00a5`;
+    bot.sendMessage(chat_id, text_message, opts);
+  }
 });
 
 function buildTaobaoURL(url, shop = false, app = false) {
@@ -151,8 +158,8 @@ function contains(url, query, regexp = false) {
 }
 
 function buildPrice(code) {
-  var arr = code.split('');
-  var vocabulary = {
+  let arr = code.split('');
+  const vocabulary = {
     'A': 1,
     'B': 2,
     'C': 3,
@@ -160,8 +167,12 @@ function buildPrice(code) {
     'E': 5,
     'F': 6
   };
-  var price = vocabulary[arr[0]] * 100 + ((parseInt(arr[2]) + 5) % 10) * 10;
-  return price;
+  const keys = Object.keys(vocabulary);
+  if (keys.indexOf(arr[0]) != -1) {
+    return price = vocabulary[arr[0]] * 100 + ((parseInt(arr[2]) + 5) % 10) * 10;
+  } else {
+    return null
+  }
 }
 
 function buildMessage(item, telegram, url) {
@@ -190,59 +201,57 @@ function buildMessage(item, telegram, url) {
   text += `\nPrice: ${item.price} (not logged in)\n`;
   text += `[Link](${item.link})\n\n`;
   text += item.shop.name ? `Shop: [${item.shop.name}](${item.shop.url})\n` : ``;
-  //text += item.shop.url ? `https:${item.shop.url}\n` : ``;
-  translate.translate(text, {
-    from: 'zh',
-    to: 'en'
-  }, (err, res) => {
-    console.log(res);
-    if (item.images.length>1) {
+  translate.translate(text, languages, (err, resolve) => {
+    console.log(resolve);
+    if (item.images.length > 1) {
       let media = [];
       item.images.forEach(image => {
-        media.push({ type: 'photo', media: `https:${image}`});
-      });
-      bot.sendMediaGroup(telegram.chat_id, media, opts)
-      .then(resolve => {
-        console.log(resolve);
-        opts.reply_to_message_id = resolve[0].message_id;
-        let text = res.text[0].replace(MD_entitities, '');
-        delete opts.media;
-        console.log(opts);
-        opts.caption = text;
-        bot.sendPhoto(telegram.chat_id, `${item.images.length > 0 ? `https:${item.images[0]}\n` : ``}`, opts)
-        .then(resolve => {
-          if (contains(url, M_INTL) || contains(url, H5)) {
-            bot.deleteMessage(telegram.chat_id, telegram.message_id);
-          }
-        })
-      })
-      .catch(err => {
-        console.log(err);
-        opts.caption = res.text[0].replace(MD_entitities, '');
-        console.log(opts.caption);
-        opts.disable_web_page_preview = true;
-        bot.sendPhoto(telegram.chat_id, `${item.images.length > 0 ? `https:${item.images[0]}\n` : ``}`, opts)
-        .then(resolve => {
-          if (contains(url, M_INTL) || contains(url, H5)) {
-            bot.deleteMessage(telegram.chat_id, telegram.message_id);
-          }
-        })
-        .catch(err => {
-          console.log(err.response.req.res.body);
-          text = `Dude, not today\n${err.response.req.res.body.error_code}: ${err.response.req.res.body.desciption}`;
-          if (contains(url, M_INTL) || contains(url, H5)) {
-            bot.deleteMessage(telegram.chat_id, telegram.message_id);
-            text += `\n[URL](${item.link})`;
-          }
-
-          bot.sendMessage(telegram.chat_id, text, {
-            parse_mode: 'Markdown'
-          });
+        media.push({
+          type: 'photo',
+          media: `https:${image}`
         });
       });
-    } 
-    else if (item.images.length > 0) {
-      opts.caption = res.text[0];
+      bot.sendMediaGroup(telegram.chat_id, media, opts)
+        .then(resolve => {
+          console.log(resolve);
+          opts.reply_to_message_id = resolve[0].message_id;
+          let text = res.text[0].replace(MD_entitities, '');
+          delete opts.media;
+          console.log(opts);
+          opts.caption = text;
+          bot.sendPhoto(telegram.chat_id, `${item.images.length > 0 ? `https:${item.images[0]}\n` : ``}`, opts)
+            .then(resolve => {
+              if (contains(url, M_INTL) || contains(url, H5)) {
+                bot.deleteMessage(telegram.chat_id, telegram.message_id);
+              }
+            })
+        })
+        .catch(err => {
+          console.log(err);
+          opts.caption = resolve.text[0].replace(MD_entitities, '');
+          console.log(opts.caption);
+          opts.disable_web_page_preview = true;
+          bot.sendPhoto(telegram.chat_id, `${item.images.length > 0 ? `https:${item.images[0]}\n` : ``}`, opts)
+            .then(resolve => {
+              if (contains(url, M_INTL) || contains(url, H5)) {
+                bot.deleteMessage(telegram.chat_id, telegram.message_id);
+              }
+            })
+            .catch(err => {
+              console.log(err.response.req.res.body);
+              text = `Dude, not today\n${err.response.req.res.body.error_code}: ${err.response.req.res.body.desciption}`;
+              if (contains(url, M_INTL) || contains(url, H5)) {
+                bot.deleteMessage(telegram.chat_id, telegram.message_id);
+                text += `\n[URL](${item.link})`;
+              }
+
+              bot.sendMessage(telegram.chat_id, text, {
+                parse_mode: 'Markdown'
+              });
+            });
+        });
+    } else if (item.images.length > 0) {
+      opts.caption = resolve.text[0];
       console.log(opts.caption);
       opts.disable_web_page_preview = true;
       bot.sendPhoto(telegram.chat_id, `${item.images.length > 0 ? `https:${item.images[0]}\n` : ``}`, opts)
@@ -262,10 +271,10 @@ function buildMessage(item, telegram, url) {
             parse_mode: 'Markdown'
           });
         });
-      }
-    });
-    
-    
+    }
+  });
+
+
 }
 
 function getAppLink(url) {
@@ -288,7 +297,6 @@ function getAppLink(url) {
 
 function getItem(url) {
   return new Promise((resolve, reject) => {
-    //request(url, (err, response, body) => {
     GBK.fetch(url).to('string', (err, body) => {
       if (!err) {
         var $ = cheerio.load(body);
@@ -305,13 +313,10 @@ function getItem(url) {
           //console.log($j_props);
           $j_props.each((i, $el) => {
             var type = $($el).find('.J_TSaleProp').attr('data-property');
-            //console.log($($el).find('.J_TSaleProp'));
-            //console.log(`type: ${type}`);
             var $values = $($el).find('.J_TSaleProp li');
             var values = [];
             $values.each((index, $el) => {
               value = $($el).find('span').text();
-              // console.log(value);
               values.push(value);
             });
             info.props.push({
