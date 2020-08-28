@@ -1,5 +1,5 @@
-var iconv = require('iconv-lite');
-var page = require('./libs/page');
+const iconv = require('iconv-lite');
+const page = require('./libs/page');
 
 exports.toString = toString
 exports.toBuffer = toBuffer
